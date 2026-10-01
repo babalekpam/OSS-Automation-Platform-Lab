@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+validation/reports/*.json
+validation/reports/*.md
+!validation/reports/.gitkeep

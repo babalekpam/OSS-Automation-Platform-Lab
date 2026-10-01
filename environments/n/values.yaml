@@ -1,0 +1,3 @@
+# Release N (current). Consumed by docker-compose today; Helm values once charts exist.
+release: n
+image: oss-lab:n

@@ -1,0 +1,3 @@
+# Release N+1 (candidate).
+release: n1
+image: oss-lab:n1

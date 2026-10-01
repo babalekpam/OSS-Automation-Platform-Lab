@@ -8,6 +8,24 @@ The focus is the **platform layer**, not the network itself: how inventory, orch
 
 ---
 
+## Status
+
+Runnable today with **no Docker or Kubernetes** (`make bootstrap && make ci`): the platform core, the
+N/N+1 qualification harness, the onboarding gate, and the AI engineering services, all covered by tests.
+
+| Area | State |
+|---|---|
+| Catalog, orchestrator (compensation, retries, idempotency), inventory, activation, controller/device simulator, assurance | Built, in-memory, behind TMF633/638/639/640/641/642-style HTTP APIs |
+| Three-way reconciliation (intended vs controller vs device) | Built, 8 finding types |
+| N/N+1 readiness report (scenarios, OpenAPI contract diff, state migration, performance, go/no-go) | Built; works in-process or against two deployed URLs |
+| Onboarding framework | Built; 1 device type + 2 service models pass the gate |
+| AI: anomaly detection, log template mining, failure prediction, test drafting, workflow analytics + root cause | Built, deterministic, advisory; models trained on synthetic data |
+| NetBox, Kafka, Temporal, OpenDaylight, containerlab, Kubernetes/Helm, Argo CD, Prometheus/Loki/Grafana | **Not built yet** (stand-ins sit behind the same interfaces; see `docs/adr/0002-in-process-first.md`) |
+| Schemathesis API fuzzing; mixed-version interop (orchestrator x activation) | Built |
+| Pact consumer contracts, pyATS/Robot | **Not built yet** |
+
+---
+
 ## Table of Contents
 
 1. [What This Lab Demonstrates](#what-this-lab-demonstrates)
@@ -113,71 +131,50 @@ flowchart TB
 ## Repository Layout
 
 ```
-oss-automation-lab/
-├── platform/
-│   ├── catalog/                 # Service & resource specs (TMF633)
-│   ├── orchestrator/            # Service order handling, Temporal workflows
-│   ├── inventory-adapter/       # NetBox ⇄ TMF638/639
-│   ├── activation/              # Config rendering & southbound push (TMF640)
-│   ├── controller/              # NETCONF/gNMI controller service
-│   └── assurance/               # Alarm ingestion & service health (TMF642)
-├── network/
-│   └── topologies/              # containerlab topologies
-├── environments/
-│   ├── n/                       # Helm values: current platform versions
-│   └── n1/                      # Helm values: candidate platform versions
-├── onboarding/
-│   ├── device-types/            # Onboarding packages per vendor/OS
-│   ├── service-models/          # Service definitions + templates
-│   └── pipeline/                # Onboarding automation & acceptance tests
-├── validation/
-│   ├── contract/                # Pact + Schemathesis API contract tests
-│   ├── lifecycle/               # End-to-end lifecycle scenarios
-│   ├── interop/                 # Cross-component & cross-version tests
-│   ├── reconciliation/          # Inventory vs controller vs network
-│   └── reports/                 # Generated N vs N+1 reports
-├── ai/
-│   ├── test-generation/         # LLM test case generation from specs
-│   ├── log-analysis/            # Platform log clustering & summarization
-│   ├── predictive/              # Workflow failure prediction
-│   └── anomaly/                 # KPI anomaly detection
-├── observability/
-├── docs/
-│   ├── architecture.md
-│   ├── deployment-guide.md
-│   ├── validation-plan.md
-│   ├── onboarding-procedure.md
-│   ├── runbooks/
-│   └── adr/
-├── deploy/                      # Helm charts, Argo CD apps
-├── Makefile
-└── .github/workflows/
+.
+├── src/oss_lab/
+│   ├── core/            # catalog, orchestrator, inventory, activation, controller, assurance,
+│   │                    #   reconciliation, event bus, HTTP API, stack composition
+│   ├── validation/      # scenarios, OpenAPI contract diff, N/N+1 runner, readiness report, CLI
+│   ├── onboarding/      # onboarding pipeline + CLI
+│   ├── ai/              # anomaly, log_analysis, predictive, test_generation, workflow_opt
+│   └── main.py          # ASGI entrypoint (OSS_LAB_RELEASE=n|n1)
+├── onboarding/          # device-type and service-model packages (YAML)
+├── environments/        # n/ and n1/ release values
+├── validation/reports/  # generated readiness reports
+├── tests/
+├── docs/                # architecture, validation plan, onboarding, deployment, runbooks, adr/
+├── Dockerfile, docker-compose.yml, Makefile
+└── .github/workflows/ci.yml
 ```
+
+The package is `oss_lab` rather than `platform` because a top-level `platform` would shadow the
+standard library (ADR 0001).
 
 ---
 
 ## Quick Start
 
-**Requirements:** Linux or WSL2, 32 GB RAM recommended, Docker, kind or k3d, Helm, containerlab, Python 3.12.
+**Requirements:** Linux/macOS/WSL2 and Python 3.11+.
 
 ```bash
-git clone https://github.com/<you>/oss-automation-lab.git
-cd oss-automation-lab
+git clone https://github.com/babalekpam/oss-automation-platform-lab.git
+cd oss-automation-platform-lab
 
-make bootstrap          # Tooling, venv, pre-commit
-make cluster-up         # Local Kubernetes cluster
-make deploy ENV=n       # Deploy the full OSS stack at version N
-make network-up         # Emulated network via containerlab
-make seed               # Catalog, inventory, sample service orders
-make e2e                # Run lifecycle scenarios end to end
+make bootstrap          # venv + editable install
+make test               # unit, lifecycle, reconciliation, validation, onboarding, AI tests
+make validate           # N vs N+1 readiness report -> validation/reports/
+make onboard            # onboarding gate for every package
+make run-n              # serve release N on http://localhost:8080/docs
 ```
+
+Qualify two deployed releases: `make run-n` and `make run-n1` in two shells, then
+`make validate-remote N_URL=http://localhost:8080 N1_URL=http://localhost:8081`.
 
 | Service | URL |
 |---|---|
-| Orchestrator API (OpenAPI) | http://localhost:8080/docs |
-| NetBox | http://localhost:8000 |
-| Temporal UI | http://localhost:8088 |
-| Grafana | http://localhost:3000 |
+| Orchestrator and TMF APIs (OpenAPI) | http://localhost:8080/docs |
+| Metrics / events / reconciliation | `/metrics`, `/events`, `/reconciliation/report` |
 
 ---
 
@@ -282,13 +279,13 @@ Each onboarding package ships with acceptance criteria and must pass the full ga
 
 | Phase | Deliverable | Est. effort |
 |---|---|---|
-| 1 | Kubernetes stack: NetBox, Kafka, observability, containerlab network | 1 week |
-| 2 | Catalog, orchestrator, activation, controller services with TMF APIs | 2–3 weeks |
-| 3 | Lifecycle E2E tests + inventory reconciliation | 1–2 weeks |
-| 4 | N/N+1 environments + regression/interop suite + readiness report | 2 weeks |
-| 5 | Onboarding framework with one device type and two service models | 1 week |
-| 6 | AI services: test generation, log analysis, predictive analytics, anomaly detection | 2–3 weeks |
-| 7 | CI/CD, GitOps, documentation, demo video | 1 week |
+| 1 | Kubernetes stack: NetBox, Kafka, observability, containerlab network | 1 week (not started) |
+| 2 | Catalog, orchestrator, activation, controller services with TMF APIs | 2–3 weeks (**done**, in-memory) |
+| 3 | Lifecycle E2E tests + inventory reconciliation | 1–2 weeks (**done**) |
+| 4 | N/N+1 environments + regression/interop suite + readiness report | 2 weeks (**done**; interop covers 2 components) |
+| 5 | Onboarding framework with one device type and two service models | 1 week (**done**) |
+| 6 | AI services: test generation, log analysis, predictive analytics, anomaly detection | 2–3 weeks (**done**, synthetic data, no LLM wired) |
+| 7 | CI/CD, GitOps, documentation, demo video | 1 week (CI + docs done; GitOps, video not started) |
 
 ---
 
