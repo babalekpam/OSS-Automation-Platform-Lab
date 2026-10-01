@@ -25,7 +25,7 @@ class Conflict(LabError):
 
 
 class ValidationFailed(LabError):
-    status = 422
+    status = 400
     code = "validation_failed"
 
 

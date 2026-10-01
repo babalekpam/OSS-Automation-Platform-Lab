@@ -36,7 +36,9 @@ class Orchestrator:
         assurance: Assurance,
         bus: EventBus,
         max_attempts: int = 3,
+        release: str = "n",
     ) -> None:
+        self.release = release
         self.catalog, self.inventory = catalog, inventory
         self.activation, self.assurance, self.bus = activation, assurance, bus
         self.max_attempts = max_attempts
@@ -155,7 +157,7 @@ class Orchestrator:
             return lambda: self._set_state(service_id, state)
 
         def push(chars: dict[str, Any], enabled: bool) -> Callable[[], None]:
-            return lambda: self.activation.activate(service_id, spec, chars, enabled)
+            return lambda: self._activate(order_id, service_id, spec, chars, enabled)
 
         if action == "modify":
             immutable = {c.name for c in spec.characteristics if c.immutable}
@@ -229,7 +231,7 @@ class Orchestrator:
             self.inventory.update_service(service_id, state="reserved", resource_ids=[resource_id])
 
         def activate() -> None:
-            self.activation.activate(service_id, spec, chars, enabled=True)
+            self._activate(order_id, service_id, spec, chars, True)
 
         return [
             Step(
@@ -254,6 +256,16 @@ class Orchestrator:
         ], service_id
 
     # -- helpers ------------------------------------------------------------
+    def _activate(
+        self, order_id: str, service_id: str, spec: Any, chars: dict, enabled: bool
+    ) -> None:
+        """Release N+1 passes the order id as a correlation id, but only to an activation
+        component that advertises the capability, so it still works against release N."""
+        if self.release != "n" and "correlation_id" in self.activation.capabilities:
+            self.activation.activate(service_id, spec, chars, enabled, correlation_id=order_id)
+        else:
+            self.activation.activate(service_id, spec, chars, enabled)
+
     def _set_state(self, service_id: str, state: str) -> None:
         self.inventory.update_service(service_id, state=state)
         self.bus.publish("service.state", {"service_id": service_id, "state": state}, service_id)

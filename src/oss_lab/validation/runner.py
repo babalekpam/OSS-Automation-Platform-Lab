@@ -7,6 +7,10 @@ import math
 import time
 from typing import Any
 
+from fastapi.testclient import TestClient
+
+from ..core.api import create_app
+from ..core.stack import Stack
 from .client import LabClient
 from .contract import diff_openapi
 from .scenarios import SCENARIOS
@@ -100,6 +104,35 @@ def migration_check(n: LabClient, n1: LabClient) -> dict[str, Any]:
     }
 
 
+def interop_matrix(n_label: str = "n", n1_label: str = "n1") -> list[dict[str, Any]]:
+    """Mixed-version stacks: every orchestrator x activation release combination must pass the
+    full suite, and the N+1 correlation capability must be used only when both sides support it."""
+    rows = []
+    for orch in (n_label, n1_label):
+        for act in (n_label, n1_label):
+            stack = Stack(version=n_label, components={"orchestrator": orch, "activation": act})
+            client = LabClient(TestClient(create_app(stack)))
+            results = run_suite(client)
+            client.reset()
+            client.order(client.add_l3("r1", "ethernet-1/1", "10.0.0.1"))
+            jobs = stack.activation.jobs
+            correlated = bool(jobs) and all(j.get("correlation_id") for j in jobs)
+            expect_correlated = orch == n1_label and act == n1_label
+            failed = [r["name"] for r in results if r["status"] == "fail"]
+            ok = not failed and correlated == expect_correlated
+            rows.append(
+                {
+                    "orchestrator": orch,
+                    "activation": act,
+                    "passed": ok,
+                    "failedScenarios": failed,
+                    "correlationUsed": correlated,
+                    "correlationExpected": expect_correlated,
+                }
+            )
+    return rows
+
+
 def _perf_regressions(n: dict[str, float], n1: dict[str, float]) -> list[str]:
     out = []
     for metric in ("p95Ms", "p99Ms"):
@@ -113,7 +146,12 @@ def _perf_regressions(n: dict[str, float], n1: dict[str, float]) -> list[str]:
 
 
 def build_report(
-    n_label: str, n: LabClient, n1_label: str, n1: LabClient, component: str = "all"
+    n_label: str,
+    n: LabClient,
+    n1_label: str,
+    n1: LabClient,
+    component: str = "all",
+    interop: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     n_results, n1_results = run_suite(n), run_suite(n1)
     contract = diff_openapi(n.json("GET", "/openapi.json"), n1.json("GET", "/openapi.json"))
@@ -140,6 +178,13 @@ def build_report(
             if c["kind"] == "breaking"
         ]
         + ([] if migration["passed"] else ["state migration failed"])
+        + [
+            f"interop failure: orchestrator={r['orchestrator']} activation={r['activation']} "
+            f"(failed: {r['failedScenarios']}, correlation used={r['correlationUsed']}, "
+            f"expected={r['correlationExpected']})"
+            for r in (interop or [])
+            if not r["passed"]
+        ]
         + perf_issues
     )
     return {
@@ -156,6 +201,7 @@ def build_report(
         "contract": contract,
         "performance": perf,
         "migration": migration,
+        "interop": interop,
         "blockers": blockers,
         "decision": "GO" if not blockers else "NO-GO",
     }
@@ -194,6 +240,19 @@ def to_markdown(report: dict[str, Any]) -> str:
     for label, p in report["performance"].items():
         cells = (label, p["orders"], p["ordersPerSecond"], p["p50Ms"], p["p95Ms"], p["p99Ms"])
         lines.append("| " + " | ".join(str(c) for c in cells) + " |")
+    lines += ["", "## Mixed-version interoperability"]
+    if report.get("interop") is None:
+        lines.append("Not run (requires in-process stacks; skipped for remote targets).")
+    else:
+        lines += [
+            "| orchestrator | activation | result | correlation id used |",
+            "|---|---|---|---|",
+        ]
+        lines += [
+            f"| {r['orchestrator']} | {r['activation']} | {'pass' if r['passed'] else 'FAIL'} "
+            f"| {r['correlationUsed']} |"
+            for r in report["interop"]
+        ]
     lines += ["", "## State migration"]
     lines += [f"- [{'x' if c['ok'] else ' '}] {c['name']}" for c in report["migration"]["checks"]]
     if report["behavioralDiffs"]:

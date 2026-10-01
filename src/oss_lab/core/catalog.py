@@ -6,12 +6,14 @@ from __future__ import annotations
 import ipaddress
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .errors import Conflict, NotFound, ValidationFailed
 
 
 class Characteristic(BaseModel):
+    model_config = ConfigDict(strict=True)
+
     name: str
     type: Literal["string", "integer", "boolean", "ipv4"] = "string"
     required: bool = True
@@ -20,6 +22,8 @@ class Characteristic(BaseModel):
 
 
 class ServiceSpecification(BaseModel):
+    model_config = ConfigDict(strict=True)
+
     id: str
     name: str
     version: str = "1.0"

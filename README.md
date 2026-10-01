@@ -21,7 +21,8 @@ N/N+1 qualification harness, the onboarding gate, and the AI engineering service
 | Onboarding framework | Built; 1 device type + 2 service models pass the gate |
 | AI: anomaly detection, log template mining, failure prediction, test drafting, workflow analytics + root cause | Built, deterministic, advisory; models trained on synthetic data |
 | NetBox, Kafka, Temporal, OpenDaylight, containerlab, Kubernetes/Helm, Argo CD, Prometheus/Loki/Grafana | **Not built yet** (stand-ins sit behind the same interfaces; see `docs/adr/0002-in-process-first.md`) |
-| Mixed-version interop tests, Pact/Schemathesis, pyATS/Robot | **Not built yet** |
+| Schemathesis API fuzzing; mixed-version interop (orchestrator x activation) | Built |
+| Pact consumer contracts, pyATS/Robot | **Not built yet** |
 
 ---
 
@@ -281,7 +282,7 @@ Each onboarding package ships with acceptance criteria and must pass the full ga
 | 1 | Kubernetes stack: NetBox, Kafka, observability, containerlab network | 1 week (not started) |
 | 2 | Catalog, orchestrator, activation, controller services with TMF APIs | 2–3 weeks (**done**, in-memory) |
 | 3 | Lifecycle E2E tests + inventory reconciliation | 1–2 weeks (**done**) |
-| 4 | N/N+1 environments + regression/interop suite + readiness report | 2 weeks (**done** except mixed-version interop) |
+| 4 | N/N+1 environments + regression/interop suite + readiness report | 2 weeks (**done**; interop covers 2 components) |
 | 5 | Onboarding framework with one device type and two service models | 1 week (**done**) |
 | 6 | AI services: test generation, log analysis, predictive analytics, anomaly detection | 2–3 weeks (**done**, synthetic data, no LLM wired) |
 | 7 | CI/CD, GitOps, documentation, demo video | 1 week (CI + docs done; GitOps, video not started) |

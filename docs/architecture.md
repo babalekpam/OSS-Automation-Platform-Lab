@@ -42,6 +42,12 @@ Intended state (inventory + catalog template) is compared with the controller's 
 device config. Findings: `missing_object`, `attribute_drift`, `controller_drift`, `orphaned_config`,
 `stale_reference`, `reservation_mismatch`, `orphaned_reservation`, `assurance_gap`.
 
+## Component releases
+
+`Stack(components={"orchestrator": "n1", "activation": "n"})` builds a mixed-version stack. Release N+1 of
+activation advertises a `correlation_id` capability; orchestrator N+1 uses it only if advertised, so
+N+1 works against N neighbours and vice versa.
+
 ## Lab controls
 
 `/lab/*` endpoints (reset, fault injection, drift injection, state export/import) exist only so the

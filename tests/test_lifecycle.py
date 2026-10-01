@@ -147,3 +147,24 @@ def test_alarms_drive_service_health(client, order):
     assert client.get(f"/assurance/service/{sid}/health").json()["health"] == "healthy"
     client.post("/tmf-api/alarmManagement/v4/alarm", json={"source": "r1", "severity": "major"})
     assert client.get(f"/assurance/service/{sid}/health").json()["health"] == "degraded"
+
+
+def test_malformed_state_import_is_rejected_atomically(client, order, stack):
+    order(add())
+    before = stack.export_state()
+    for bad in ({}, {"inventory": {"resources": {}, "services": {}}}, {"inventory": 1}):
+        r = client.post("/lab/import", json=bad)
+        assert r.status_code == 400 and r.json()["code"] == "validation_failed"
+    assert stack.export_state() == before
+    assert client.get("/reconciliation/report").json()["summary"]["clean"]
+
+
+def test_invalid_fault_and_alarm_inputs_are_client_errors(client):
+    assert client.post("/lab/faults", json={"device": "r1", "mode": "bogus"}).status_code == 422
+    assert client.post("/lab/faults", json={"device": "nope"}).status_code == 404
+    assert (
+        client.post(
+            "/tmf-api/alarmManagement/v4/alarm", json={"source": "r1", "severity": "bad"}
+        ).status_code
+        == 422
+    )

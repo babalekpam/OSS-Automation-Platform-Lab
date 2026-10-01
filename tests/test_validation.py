@@ -114,3 +114,32 @@ def test_readiness_no_go_when_candidate_regresses():
         for d in report["behavioralDiffs"]
     )
     assert any("n1 fails" in b for b in report["blockers"])
+
+
+def test_interop_matrix_all_release_combinations_pass():
+    from oss_lab.validation.runner import interop_matrix
+
+    rows = interop_matrix()
+    assert len(rows) == 4 and all(r["passed"] for r in rows), rows
+    used = {(r["orchestrator"], r["activation"]): r["correlationUsed"] for r in rows}
+    # the new capability is used only when both sides are N+1; mixed stacks degrade gracefully
+    assert used == {("n", "n"): False, ("n", "n1"): False, ("n1", "n"): False, ("n1", "n1"): True}
+
+
+def test_readiness_no_go_on_interop_failure():
+    bad = [
+        {
+            "orchestrator": "n1",
+            "activation": "n",
+            "passed": False,
+            "failedScenarios": ["lifecycle_full"],
+            "correlationUsed": False,
+            "correlationExpected": False,
+        }
+    ]
+    report = build_report("n", lab("n"), "n1", lab("n1"), interop=bad)
+    assert report["decision"] == "NO-GO"
+    assert any(
+        b.startswith("interop failure: orchestrator=n1 activation=n") for b in report["blockers"]
+    )
+    assert "| n1 | n | FAIL |" in to_markdown(report)

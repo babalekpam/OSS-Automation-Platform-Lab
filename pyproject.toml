@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.4"]
+dev = ["pytest>=8", "ruff>=0.4", "schemathesis>=4.0"]
 
 [project.scripts]
 oss-lab-validate = "oss_lab.validation.cli:main"

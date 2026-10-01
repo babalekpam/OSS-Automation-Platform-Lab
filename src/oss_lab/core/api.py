@@ -6,14 +6,15 @@ reset, state export/import) and exist so the validation suite can drive any targ
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .catalog import ServiceSpecification
-from .errors import LabError
+from .errors import LabError, ValidationFailed
 from .stack import Stack
 
 TMF633 = "/tmf-api/serviceCatalogManagement/v4"
@@ -88,16 +89,21 @@ class ResourceOut(BaseModel):
     attributes: dict[str, Any] = Field(default_factory=dict)
 
 
+class ErrorOut(BaseModel):
+    code: str
+    reason: str
+
+
 class AlarmIn(BaseModel):
     source: str
-    severity: str
+    severity: Literal["warning", "minor", "major", "critical"]
     text: str = ""
 
 
 class FaultIn(BaseModel):
     device: str
-    mode: str = "permanent"
-    count: int = 1
+    mode: Literal["permanent", "transient"] = "permanent"
+    count: int = Field(default=1, ge=1)
 
 
 class DriftIn(BaseModel):
@@ -124,7 +130,15 @@ def _service_out(svc: dict[str, Any], version: str) -> dict[str, Any]:
 
 def create_app(stack: Stack | None = None) -> FastAPI:
     stack = stack or Stack()
-    app = FastAPI(title="OSS Automation Lab", version=f"{stack.version}")
+    app = FastAPI(
+        title="OSS Automation Lab",
+        version=f"{stack.version}",
+        responses={
+            400: {"model": ErrorOut, "description": "Validation failed"},
+            404: {"model": ErrorOut, "description": "Not found"},
+            409: {"model": ErrorOut, "description": "Conflict"},
+        },
+    )
     app.state.stack = stack
     svc_model = ServiceOutN1 if stack.version == "n1" else ServiceOut
 
@@ -134,9 +148,18 @@ def create_app(stack: Stack | None = None) -> FastAPI:
             status_code=exc.status, content={"code": exc.code, "reason": exc.message}
         )
 
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
+        # Framework-level errors (bad JSON, unknown route) share the platform error shape.
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"code": "http_error", "reason": str(exc.detail)},
+            headers=getattr(exc, "headers", None),
+        )
+
     @app.get("/health")
     def health() -> dict[str, Any]:
-        return {"status": "ok", "release": stack.version}
+        return {"status": "ok", "release": stack.version, "components": stack.components}
 
     # -- TMF633 catalog ------------------------------------------------------
     @app.get(f"{TMF633}/serviceSpecification")
@@ -244,17 +267,17 @@ def create_app(stack: Stack | None = None) -> FastAPI:
         return "\n".join(lines) + "\n"
 
     # -- lab controls --------------------------------------------------------------
-    @app.post("/lab/reset")
+    @app.post("/lab/reset", include_in_schema=False)
     def lab_reset() -> dict[str, str]:
         stack.reset()
         return {"status": "reset"}
 
-    @app.post("/lab/faults")
+    @app.post("/lab/faults", include_in_schema=False)
     def lab_fault(fault: FaultIn) -> dict[str, Any]:
         stack.controller.device(fault.device).inject_fault(fault.mode, fault.count)
         return fault.model_dump()
 
-    @app.post("/lab/drift")
+    @app.post("/lab/drift", include_in_schema=False)
     def lab_drift(drift: DriftIn) -> dict[str, Any]:
         dev = stack.controller.device(drift.device)
         if drift.value is None:
@@ -263,13 +286,20 @@ def create_app(stack: Stack | None = None) -> FastAPI:
             dev.config[drift.key] = drift.value
         return drift.model_dump()
 
-    @app.get("/lab/export")
+    @app.get("/lab/export", include_in_schema=False)
     def lab_export() -> dict[str, Any]:
         return stack.export_state()
 
-    @app.post("/lab/import")
+    @app.post("/lab/import", include_in_schema=False)
     def lab_import(state: dict[str, Any]) -> dict[str, str]:
-        stack.import_state(state)
+        backup = stack.export_state()
+        try:
+            stack.import_state(state)
+        except (KeyError, TypeError, ValueError, AttributeError, IndexError) as exc:
+            stack.import_state(backup)  # keep the import atomic
+            raise ValidationFailed(
+                f"malformed state document: {type(exc).__name__}: {exc}"
+            ) from exc
         return {"status": "imported"}
 
     return app

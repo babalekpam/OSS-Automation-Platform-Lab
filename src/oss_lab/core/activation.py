@@ -18,6 +18,9 @@ _env = Environment(undefined=StrictUndefined, autoescape=False)
 
 
 class Activation:
+    # Optional features this release advertises so callers can negotiate (mixed-version stacks).
+    capabilities: frozenset[str] = frozenset()
+
     def __init__(self, controller: Controller) -> None:
         self.controller = controller
         self.jobs: list[dict[str, Any]] = []
@@ -77,4 +80,22 @@ class Activation:
             job["state"] = "failed"
             raise
         job["state"] = "completed"
+        return job
+
+
+class ActivationV2(Activation):
+    """Release N+1: accepts and records a correlation id (the originating order) per job."""
+
+    capabilities = frozenset({"correlation_id"})
+
+    def activate(  # type: ignore[override]
+        self,
+        service_id: str,
+        spec: ServiceSpecification,
+        chars: dict[str, Any],
+        enabled: bool,
+        correlation_id: str | None = None,
+    ) -> dict[str, Any]:
+        job = super().activate(service_id, spec, chars, enabled)
+        job["correlation_id"] = correlation_id
         return job

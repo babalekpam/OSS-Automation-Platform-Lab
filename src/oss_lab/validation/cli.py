@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from ..core.api import create_app
 from ..core.stack import Stack
 from .client import LabClient
-from .runner import build_report, to_markdown
+from .runner import build_report, interop_matrix, to_markdown
 
 
 def _client(label: str, url: str | None) -> LabClient:
@@ -31,8 +31,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", default="validation/reports")
     args = p.parse_args(argv)
 
+    in_process = not (args.n_url or args.n1_url)
     report = build_report(
-        args.n, _client(args.n, args.n_url), args.n1, _client(args.n1, args.n1_url), args.component
+        args.n,
+        _client(args.n, args.n_url),
+        args.n1,
+        _client(args.n1, args.n1_url),
+        args.component,
+        interop=interop_matrix(args.n, args.n1) if in_process else None,
     )
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

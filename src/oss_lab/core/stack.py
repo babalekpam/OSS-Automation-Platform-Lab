@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .activation import Activation
+from .activation import Activation, ActivationV2
 from .assurance import Assurance
 from .catalog import Catalog
 from .controller import Controller
@@ -21,8 +21,17 @@ SEED_DEVICES = {
 
 
 class Stack:
-    def __init__(self, version: str = "n", seed: bool = True) -> None:
+    COMPONENTS = ("orchestrator", "activation")
+
+    def __init__(
+        self,
+        version: str = "n",
+        seed: bool = True,
+        components: dict[str, str] | None = None,
+    ) -> None:
+        """``components`` overrides the release of individual components (mixed-version stack)."""
         self.version, self._seed = version, seed
+        self.components = {c: (components or {}).get(c, version) for c in self.COMPONENTS}
         self._build()
 
     def _build(self) -> None:
@@ -30,10 +39,16 @@ class Stack:
         self.catalog = Catalog(seed=self._seed)
         self.inventory = Inventory()
         self.controller = Controller()
-        self.activation = Activation(self.controller)
+        activation_cls = Activation if self.components["activation"] == "n" else ActivationV2
+        self.activation = activation_cls(self.controller)
         self.assurance = Assurance()
         self.orchestrator = Orchestrator(
-            self.catalog, self.inventory, self.activation, self.assurance, self.bus
+            self.catalog,
+            self.inventory,
+            self.activation,
+            self.assurance,
+            self.bus,
+            release=self.components["orchestrator"],
         )
         if self._seed:
             for dev_id, ifaces in SEED_DEVICES.items():
