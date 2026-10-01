@@ -1,0 +1,21 @@
+# Service-model onboarding package: high-MTU uplink with an operator-supplied description
+kind: service-model
+spec:
+  id: uplink-interface
+  name: Uplink Interface Service
+  description: Core-facing routed uplink using jumbo frames.
+  characteristics:
+    - {name: device, immutable: true}
+    - {name: interface, immutable: true}
+    - {name: ipv4, type: ipv4}
+    - {name: prefix_length, type: integer, required: false, default: 31}
+    - {name: description}
+  config_key: "interfaces/{{ interface }}"
+  template: >-
+    {"description": {{ description|tojson }}, "enabled": {{ enabled|tojson }}, "mtu": 9216,
+    "ipv4": {"address": {{ ipv4|tojson }}, "prefix_length": {{ prefix_length }}}}
+acceptance:
+  device: r2
+  interface: ethernet-1/2
+  characteristics: {ipv4: 203.0.113.0, description: uplink-to-core}
+  modify: {description: uplink-to-core-b}

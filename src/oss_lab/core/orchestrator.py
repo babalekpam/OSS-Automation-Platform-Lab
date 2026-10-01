@@ -58,10 +58,16 @@ class Orchestrator:
         self.orders[order_id] = order
         self._emit_order(order)
         for index, item_in in enumerate(order_in.get("orderItem", []), start=1):
-            order["orderItem"].append(self._run_item(order_id, str(item_in.get("id") or index), item_in))
+            order["orderItem"].append(
+                self._run_item(order_id, str(item_in.get("id") or index), item_in)
+            )
         states = {i["state"] for i in order["orderItem"]}
         order["state"] = (
-            "completed" if states <= {"completed"} else "failed" if states == {"failed"} else "partial"
+            "completed"
+            if states <= {"completed"}
+            else "failed"
+            if states == {"failed"}
+            else "partial"
         )
         order["completionDate"] = time.time()
         self.metrics[f"orders_{order['state']}"] += 1
@@ -72,7 +78,13 @@ class Orchestrator:
     def _run_item(self, order_id: str, item_id: str, item_in: dict[str, Any]) -> dict[str, Any]:
         action = item_in.get("action")
         svc_in = item_in.get("service", {})
-        item = {"id": item_id, "action": action, "state": "inProgress", "service": {}, "error": None}
+        item = {
+            "id": item_id,
+            "action": action,
+            "state": "inProgress",
+            "service": {},
+            "error": None,
+        }
         ctx = {"order_id": order_id, "item_id": item_id}
         try:
             if action not in self.ACTIONS:
@@ -147,7 +159,9 @@ class Orchestrator:
 
         if action == "modify":
             immutable = {c.name for c in spec.characteristics if c.immutable}
-            changed = sorted(n for n in immutable if n in chars_in and chars_in[n] != old_chars.get(n))
+            changed = sorted(
+                n for n in immutable if n in chars_in and chars_in[n] != old_chars.get(n)
+            )
             if changed:
                 raise ValidationFailed(f"characteristics are immutable: {changed}")
             new_chars = self.catalog.validate_characteristics(spec, {**old_chars, **chars_in})
@@ -218,8 +232,14 @@ class Orchestrator:
             self.activation.activate(service_id, spec, chars, enabled=True)
 
         return [
-            Step("create_service", create, lambda: self.inventory.delete_service_record(service_id)),
-            Step("reserve_resources", reserve, lambda: self.inventory.release(resource_id, service_id)),
+            Step(
+                "create_service", create, lambda: self.inventory.delete_service_record(service_id)
+            ),
+            Step(
+                "reserve_resources",
+                reserve,
+                lambda: self.inventory.release(resource_id, service_id),
+            ),
             Step(
                 "activate",
                 activate,
@@ -239,7 +259,9 @@ class Orchestrator:
         self.bus.publish("service.state", {"service_id": service_id, "state": state}, service_id)
 
     def _emit_order(self, order: dict[str, Any]) -> None:
-        self.bus.publish("order.state", {"order_id": order["id"], "state": order["state"]}, order["id"])
+        self.bus.publish(
+            "order.state", {"order_id": order["id"], "state": order["state"]}, order["id"]
+        )
 
     def _emit_step(self, ctx: dict[str, Any], step: str, status: str, **extra: Any) -> None:
         self.bus.publish(

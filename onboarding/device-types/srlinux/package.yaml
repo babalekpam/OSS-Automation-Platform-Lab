@@ -1,0 +1,9 @@
+# Device-type onboarding package: Nokia SR Linux (emulated via containerlab in the lab network)
+kind: device-type
+name: srlinux-24
+os: srlinux
+interfaces: [ethernet-1/1, ethernet-1/2, ethernet-1/3, ethernet-1/4, lo0]
+acceptance:
+  service: l3-interface
+  interface: ethernet-1/1
+  ipv4: 192.0.2.1

@@ -41,39 +41,85 @@ def reconcile(
         actual, view = actual_cfg.get(key), view_cfg.get(key)
         if actual is None:
             findings.append(
-                _finding("missing_object", "high", f"{key} absent on {device}", service=sid, device=device, key=key)
+                _finding(
+                    "missing_object",
+                    "high",
+                    f"{key} absent on {device}",
+                    service=sid,
+                    device=device,
+                    key=key,
+                )
             )
         elif actual != intended:
-            drift = sorted(k for k in set(actual) | set(intended) if actual.get(k) != intended.get(k))
+            drift = sorted(
+                k for k in set(actual) | set(intended) if actual.get(k) != intended.get(k)
+            )
             findings.append(
-                _finding("attribute_drift", "medium", f"{key} differs from intent in {drift}", service=sid, device=device, key=key)
+                _finding(
+                    "attribute_drift",
+                    "medium",
+                    f"{key} differs from intent in {drift}",
+                    service=sid,
+                    device=device,
+                    key=key,
+                )
             )
         if view != intended:
             findings.append(
-                _finding("controller_drift", "medium", f"controller view of {key} differs from intent", service=sid, device=device, key=key)
+                _finding(
+                    "controller_drift",
+                    "medium",
+                    f"controller view of {key} differs from intent",
+                    service=sid,
+                    device=device,
+                    key=key,
+                )
             )
         for rid in svc["resource_ids"]:
             res = inventory.resources.get(rid)
             if res is None:
-                findings.append(_finding("stale_reference", "high", f"{rid} not in inventory", service=sid))
+                findings.append(
+                    _finding("stale_reference", "high", f"{rid} not in inventory", service=sid)
+                )
             elif res["assigned_to"] != sid:
                 findings.append(
-                    _finding("reservation_mismatch", "medium", f"{rid} assigned to {res['assigned_to']}", service=sid)
+                    _finding(
+                        "reservation_mismatch",
+                        "medium",
+                        f"{rid} assigned to {res['assigned_to']}",
+                        service=sid,
+                    )
                 )
         if assurance is not None and sid not in assurance.enrolled:
-            findings.append(_finding("assurance_gap", "low", "live service not enrolled in assurance", service=sid))
+            findings.append(
+                _finding(
+                    "assurance_gap", "low", "live service not enrolled in assurance", service=sid
+                )
+            )
 
     for dev_id in controller.devices:
         for key in controller.actual(dev_id):
             if key.startswith(MANAGED_PREFIX) and (dev_id, key) not in claimed:
                 findings.append(
-                    _finding("orphaned_config", "high", f"{key} on {dev_id} has no live service", device=dev_id, key=key)
+                    _finding(
+                        "orphaned_config",
+                        "high",
+                        f"{key} on {dev_id} has no live service",
+                        device=dev_id,
+                        key=key,
+                    )
                 )
     for res in inventory.resources.values():
         owner = res["assigned_to"]
-        if owner and (owner not in inventory.services or inventory.services[owner]["state"] == "terminated"):
+        if owner and (
+            owner not in inventory.services or inventory.services[owner]["state"] == "terminated"
+        ):
             findings.append(
-                _finding("orphaned_reservation", "medium", f"{res['id']} reserved by missing/terminated {owner}")
+                _finding(
+                    "orphaned_reservation",
+                    "medium",
+                    f"{res['id']} reserved by missing/terminated {owner}",
+                )
             )
 
     return {

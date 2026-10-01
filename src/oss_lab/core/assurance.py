@@ -53,7 +53,9 @@ class Assurance:
         parent device: critical -> down, major/minor -> degraded."""
         if service_id not in self.enrolled:
             return {"service_id": service_id, "health": "unmonitored", "alarms": []}
-        scope = set(self.enrolled[service_id]) | {r.split(":")[0] for r in self.enrolled[service_id]}
+        scope = set(self.enrolled[service_id]) | {
+            r.split(":")[0] for r in self.enrolled[service_id]
+        }
         hits = [a for a in self.active_alarms() if a["source"] in scope]
         if any(a["severity"] == "critical" for a in hits):
             state = "down"

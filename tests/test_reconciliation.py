@@ -18,13 +18,25 @@ def test_detects_attribute_drift(client, order, stack):
 
 def test_detects_missing_object(client, order):
     setup_service(order)
-    client.post("/lab/drift", json={"device": "r1", "key": "interfaces/ethernet-1/1", "value": None})
+    client.post(
+        "/lab/drift", json={"device": "r1", "key": "interfaces/ethernet-1/1", "value": None}
+    )
     assert "missing_object" in types(client)
 
 
 def test_detects_orphaned_config(client):
-    client.post("/lab/drift", json={"device": "r2", "key": "interfaces/ethernet-1/2", "value": {
-        "enabled": True, "mtu": 1500, "ipv4": {"address": "1.1.1.1", "prefix_length": 32}}})
+    client.post(
+        "/lab/drift",
+        json={
+            "device": "r2",
+            "key": "interfaces/ethernet-1/2",
+            "value": {
+                "enabled": True,
+                "mtu": 1500,
+                "ipv4": {"address": "1.1.1.1", "prefix_length": 32},
+            },
+        },
+    )
     assert types(client) == ["orphaned_config"]
 
 

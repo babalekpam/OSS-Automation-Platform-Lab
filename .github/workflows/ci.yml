@@ -1,0 +1,21 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: pytest
+      - name: N/N+1 readiness gate
+        run: python -m oss_lab.validation.cli --component all
+      - name: Onboarding gate
+        run: python -m oss_lab.onboarding.cli onboarding
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: readiness-report, path: validation/reports/ }

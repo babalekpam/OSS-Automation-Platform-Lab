@@ -1,0 +1,20 @@
+# Service-model onboarding package: routed management interface with fixed MTU
+kind: service-model
+spec:
+  id: mgmt-interface
+  name: Management Interface Service
+  description: Routed management interface, MTU fixed at 1500.
+  characteristics:
+    - {name: device, immutable: true}
+    - {name: interface, immutable: true}
+    - {name: ipv4, type: ipv4}
+    - {name: description, required: false, default: management}
+  config_key: "interfaces/{{ interface }}"
+  template: >-
+    {"description": {{ description|tojson }}, "enabled": {{ enabled|tojson }}, "mtu": 1500,
+    "ipv4": {"address": {{ ipv4|tojson }}, "prefix_length": 24}}
+acceptance:
+  device: r1
+  interface: ethernet-1/4
+  characteristics: {ipv4: 198.51.100.10}
+  modify: {description: oob-management}

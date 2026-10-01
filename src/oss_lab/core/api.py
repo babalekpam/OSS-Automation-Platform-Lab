@@ -130,7 +130,9 @@ def create_app(stack: Stack | None = None) -> FastAPI:
 
     @app.exception_handler(LabError)
     async def _lab_error(_: Request, exc: LabError) -> JSONResponse:
-        return JSONResponse(status_code=exc.status, content={"code": exc.code, "reason": exc.message})
+        return JSONResponse(
+            status_code=exc.status, content={"code": exc.code, "reason": exc.message}
+        )
 
     @app.get("/health")
     def health() -> dict[str, Any]:
@@ -189,7 +191,9 @@ def create_app(stack: Stack | None = None) -> FastAPI:
 
     @app.get(f"{TMF639}/resource", response_model=list[ResourceOut])
     def list_resources(type: str | None = None) -> list[dict[str, Any]]:
-        return [_res_out(r) for r in stack.inventory.resources.values() if type in (None, r["type"])]
+        return [
+            _res_out(r) for r in stack.inventory.resources.values() if type in (None, r["type"])
+        ]
 
     @app.get(f"{TMF639}/resource/{{resource_id:path}}", response_model=ResourceOut)
     def get_resource(resource_id: str) -> dict[str, Any]:
@@ -228,7 +232,9 @@ def create_app(stack: Stack | None = None) -> FastAPI:
 
     @app.get("/metrics", response_class=PlainTextResponse)
     def metrics() -> str:
-        lines = [f"oss_lab_{name} {value}" for name, value in sorted(stack.orchestrator.metrics.items())]
+        lines = [
+            f"oss_lab_{name} {value}" for name, value in sorted(stack.orchestrator.metrics.items())
+        ]
         by_state: dict[str, int] = {}
         for s in stack.inventory.services.values():
             by_state[s["state"]] = by_state.get(s["state"], 0) + 1

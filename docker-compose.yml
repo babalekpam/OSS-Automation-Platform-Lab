@@ -1,0 +1,11 @@
+# Parallel N / N+1 stacks for local qualification: `docker compose up -d`
+# then `make validate-remote N_URL=http://localhost:8080 N1_URL=http://localhost:8081`
+services:
+  platform-n:
+    build: .
+    environment: { OSS_LAB_RELEASE: n }
+    ports: ["8080:8080"]
+  platform-n1:
+    build: .
+    environment: { OSS_LAB_RELEASE: n1 }
+    ports: ["8081:8080"]

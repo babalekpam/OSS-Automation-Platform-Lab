@@ -18,8 +18,18 @@ def test_add_activates_and_is_consistent(client, order, stack):
 
 def test_full_lifecycle(client, order, stack):
     sid = order(add())["orderItem"][0]["service"]["id"]
-    mod = order({"action": "modify", "service": {"id": sid, "serviceCharacteristic": [
-        {"name": "ipv4", "value": "10.0.0.3"}, {"name": "mtu", "value": 1500}]}})
+    mod = order(
+        {
+            "action": "modify",
+            "service": {
+                "id": sid,
+                "serviceCharacteristic": [
+                    {"name": "ipv4", "value": "10.0.0.3"},
+                    {"name": "mtu", "value": 1500},
+                ],
+            },
+        }
+    )
     assert mod["state"] == "completed"
     assert stack.controller.actual("r1")["interfaces/ethernet-1/1"]["mtu"] == 1500
 
@@ -91,8 +101,15 @@ def test_validation_errors(order):
 
 def test_immutable_characteristic_rejected(order):
     sid = order(add())["orderItem"][0]["service"]["id"]
-    o = order({"action": "modify", "service": {"id": sid, "serviceCharacteristic": [
-        {"name": "interface", "value": "ethernet-1/2"}]}})
+    o = order(
+        {
+            "action": "modify",
+            "service": {
+                "id": sid,
+                "serviceCharacteristic": [{"name": "interface", "value": "ethernet-1/2"}],
+            },
+        }
+    )
     assert o["orderItem"][0]["error"]["code"] == "validation_failed"
 
 
@@ -105,15 +122,26 @@ def test_terminated_service_cannot_change(order):
 
 def test_events_trace_the_order(client, order):
     o = order(add())
-    steps = [e["payload"]["step"] for e in client.get("/events", params={
-        "topic": "workflow.step", "key": o["id"]}).json() if e["payload"]["status"] == "completed"]
-    assert steps == ["create_service", "reserve_resources", "activate", "enroll_assurance", "set_state"]
+    steps = [
+        e["payload"]["step"]
+        for e in client.get("/events", params={"topic": "workflow.step", "key": o["id"]}).json()
+        if e["payload"]["status"] == "completed"
+    ]
+    assert steps == [
+        "create_service",
+        "reserve_resources",
+        "activate",
+        "enroll_assurance",
+        "set_state",
+    ]
 
 
 def test_alarms_drive_service_health(client, order):
     sid = order(add())["orderItem"][0]["service"]["id"]
-    alarm = client.post("/tmf-api/alarmManagement/v4/alarm", json={
-        "source": "r1:ethernet-1/1", "severity": "critical", "text": "LOS"}).json()
+    alarm = client.post(
+        "/tmf-api/alarmManagement/v4/alarm",
+        json={"source": "r1:ethernet-1/1", "severity": "critical", "text": "LOS"},
+    ).json()
     assert client.get(f"/assurance/service/{sid}/health").json()["health"] == "down"
     client.patch(f"/tmf-api/alarmManagement/v4/alarm/{alarm['id']}/clear")
     assert client.get(f"/assurance/service/{sid}/health").json()["health"] == "healthy"
