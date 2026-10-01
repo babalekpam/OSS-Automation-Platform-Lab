@@ -1,11 +1,10 @@
-# NetOPS-AI-lab
-# NetOps-AI Lab
+# OSS Automation Platform Lab
 
-**An open-source reference build of an AI-driven network automation and operational-intelligence platform for a carrier-grade IP/transport network.**
+**An open-source reference build of a carrier OSS automation ecosystem: platform integration, N/N+1 validation, network and service onboarding, lifecycle orchestration, and AI-assisted test automation and operational intelligence.**
 
-This project reproduces, end to end and on commodity hardware, the core workflows of a modern telecom automation role: network onboarding into a source of truth, service provisioning and activation, streaming telemetry, N/N+1 upgrade validation, anomaly detection, event correlation, and GenAI-assisted root-cause analysis.
+The focus is the **platform layer**, not the network itself: how inventory, orchestration, controllers, activation, and assurance systems are integrated, upgraded, validated, and kept in sync, and how AI makes that engineering work faster and more reliable.
 
-> **Scope note.** This is an independent lab built entirely from public, open-source tools and synthetic data. It contains no proprietary code, configurations, topologies, data, or tooling from any employer or carrier.
+> **Scope note.** Independent lab built from public, open-source tools, open standards (TM Forum Open APIs, OpenConfig, YANG), and synthetic data. No proprietary employer code, configurations, data, or system names.
 
 ---
 
@@ -16,13 +15,14 @@ This project reproduces, end to end and on commodity hardware, the core workflow
 3. [Tech Stack](#tech-stack)
 4. [Repository Layout](#repository-layout)
 5. [Quick Start](#quick-start)
-6. [Modules](#modules)
-7. [N/N+1 Upgrade Validation](#nn1-upgrade-validation)
-8. [AI & Operational Intelligence](#ai--operational-intelligence)
-9. [Testing & CI/CD](#testing--cicd)
-10. [Documentation Set](#documentation-set)
-11. [Build Roadmap](#build-roadmap)
-12. [Role-to-Module Mapping](#role-to-module-mapping)
+6. [Platform Modules](#platform-modules)
+7. [N/N+1 Platform Validation](#nn1-platform-validation)
+8. [Onboarding Framework](#onboarding-framework)
+9. [AI for Platform Engineering](#ai-for-platform-engineering)
+10. [Testing & CI/CD](#testing--cicd)
+11. [Documentation Set](#documentation-set)
+12. [Build Roadmap](#build-roadmap)
+13. [Role-to-Module Mapping](#role-to-module-mapping)
 
 ---
 
@@ -30,66 +30,64 @@ This project reproduces, end to end and on commodity hardware, the core workflow
 
 | Capability | How it shows up here |
 |---|---|
-| Intelligent network automation | API-driven workflows that provision L3VPN / EVPN services and remediate faults |
-| Operational platform validation | Reproducible N and N+1 lab environments with automated regression suites |
-| Network & service onboarding | Device discovery → NetBox inventory → config baseline → assurance enrollment |
-| Troubleshooting & operational intelligence | Log/telemetry pipelines, topology-aware event correlation, RCA reports |
-| AI / ML / GenAI for operations | Anomaly detection on telemetry, alarm clustering, LLM-assisted RCA with RAG over runbooks |
-| Documentation & best practices | Deployment guide, validation plan, onboarding SOP, runbooks, ADRs |
+| OSS ecosystem integration | Inventory, ordering, orchestration, controller, activation, and assurance components wired together through TM Forum Open APIs and Kafka |
+| N/N+1 lab environments | Two complete platform stacks (current and candidate versions) with an automated regression and interoperability suite |
+| Network & service onboarding | Repeatable onboarding pipeline for new device types, applications, and service models |
+| Lifecycle workflow validation | Provisioning → activation → assurance → modify → decommission, tested end to end |
+| Data integrity across systems | Cross-system reconciliation between inventory, controller, and network state |
+| AI-enhanced engineering | LLM-generated test cases, log analysis, predictive workflow-failure analytics, anomaly detection on platform KPIs |
 
 ---
 
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
+    subgraph NB["Northbound / BSS Simulation"]
+        ORD[Order Simulator<br/>TMF641 Service Ordering]
+    end
+
+    subgraph OSS["OSS Platform Layer"]
+        CAT[Service Catalog<br/>TMF633]
+        SO[Service Orchestrator<br/>FastAPI + Temporal]
+        INV[(Inventory<br/>NetBox · TMF638 / TMF639 adapter)]
+        ACT[Activation Engine<br/>TMF640]
+        ASR[Assurance<br/>TMF642 Alarms]
+        CTL[Controller<br/>OpenDaylight / gNMI-NETCONF adapter]
+        BUS[(Kafka Event Bus)]
+    end
+
     subgraph NET["Emulated Network (containerlab)"]
-        PE1[PE1 SR Linux] --- P1[P1 FRR] --- PE2[PE2 SR Linux]
-        P1 --- P2[P2 FRR] --- PE3[PE3 cEOS]
+        R1[SR Linux] --- R2[FRR] --- R3[SR Linux]
     end
 
-    subgraph SOT["Source of Truth"]
-        NB[(NetBox<br/>Inventory / IPAM)]
-    end
-
-    subgraph ORCH["Orchestration & Automation"]
-        API[FastAPI<br/>Service Orchestrator]
-        WF[Prefect<br/>Workflows]
-        NR[Nornir / NAPALM / gNMI]
-        BF[Batfish<br/>Pre-change validation]
-    end
-
-    subgraph OBS["Observability"]
-        GN[gNMIc<br/>Streaming telemetry]
-        SL[Syslog → Vector]
-        KF[(Kafka)]
+    subgraph OBS["Platform Observability"]
+        OTEL[OpenTelemetry]
         PR[(Prometheus)]
         LK[(Loki)]
         GF[Grafana]
     end
 
-    subgraph AI["Operational Intelligence"]
-        AD[Anomaly Detection<br/>Isolation Forest / STL]
-        EC[Event Correlation<br/>Topology graph]
-        RCA[GenAI RCA<br/>LLM + RAG]
-        VDB[(pgvector<br/>Runbooks / KB)]
+    subgraph AI["AI Engineering Services"]
+        TG[Test Generator<br/>LLM from API specs]
+        LA[Log Analyzer<br/>Drain3 + LLM]
+        PA[Predictive Analytics<br/>Workflow failure risk]
+        ADT[Anomaly Detection<br/>Platform KPIs]
     end
 
-    NET -- gNMI --> GN --> KF --> PR
-    NET -- syslog --> SL --> KF --> LK
-    PR --> GF
-    LK --> GF
-    KF --> AD --> EC --> RCA
-    VDB --> RCA
-    RCA --> API
-
-    API --> WF --> NR --> NET
-    WF --> BF
-    NB <--> WF
-    NB --> EC
+    ORD --> SO
+    CAT --> SO
+    SO <--> INV
+    SO --> ACT --> CTL --> NET
+    NET -- telemetry --> ASR
+    SO & ACT & ASR & INV --> BUS
+    SO & ACT & CTL & INV --> OTEL --> PR & LK --> GF
+    BUS --> PA & ADT
+    LK --> LA
+    CAT --> TG
 ```
 
-**Closed loop:** telemetry → anomaly → correlated incident → RCA with recommended action → validated remediation workflow → verification.
+**Design principle:** every component is an independently versioned service with a standard API contract, so any one of them can be upgraded, swapped, or validated in isolation.
 
 ---
 
@@ -97,150 +95,173 @@ flowchart LR
 
 | Layer | Tools |
 |---|---|
-| Network emulation | [containerlab](https://containerlab.dev), Nokia SR Linux, FRRouting, Arista cEOS (optional) |
-| Source of truth | NetBox (DCIM / IPAM / custom fields for services) |
-| Device automation | Python 3.12, Nornir, NAPALM, scrapli, gNMI / gNMIc |
-| Validation | Batfish, pyATS/Genie, pytest |
-| Orchestration | FastAPI microservices, Prefect workflows, Kafka |
-| Observability | gNMIc, Prometheus, Vector, Loki, Grafana |
-| AI / ML | scikit-learn, statsmodels, NetworkX, pandas |
-| GenAI | LLM API + retrieval (PostgreSQL + pgvector) |
-| Platform | Linux, Docker / Docker Compose, GitHub Actions, pre-commit |
+| Standards | TM Forum Open APIs (TMF633, 638, 639, 640, 641, 642), OpenConfig, YANG, NETCONF, gNMI |
+| Inventory | NetBox + custom TMF adapter |
+| Orchestration | Python 3.12, FastAPI microservices, Temporal workflows |
+| Controller | OpenDaylight (optional) or lightweight NETCONF/gNMI controller service |
+| Network emulation | containerlab, Nokia SR Linux, FRRouting |
+| Messaging | Kafka, Schema Registry (Avro) |
+| Observability | OpenTelemetry, Prometheus, Loki, Grafana |
+| Testing | pytest, Schemathesis (API contract fuzzing), Pact (consumer contracts), pyATS, Robot Framework |
+| AI / ML | scikit-learn, pandas, Drain3, LLM API + pgvector |
+| Platform | Linux, Docker, Kubernetes (kind / k3d), Helm, GitHub Actions, Argo CD |
+
+**Reference:** ONAP, the open-source orchestration platform that grew out of AT&T's ECOMP, informs the component boundaries here (catalog, service orchestration, inventory, controllers, assurance). This lab uses a lighter-weight implementation that runs on a single workstation.
 
 ---
 
 ## Repository Layout
 
 ```
-netops-ai-lab/
-├── topologies/
-│   ├── core-n.clab.yml            # Baseline (N) topology
-│   └── core-n1.clab.yml           # Upgraded (N+1) topology
-├── inventory/
-│   ├── netbox_seed/               # Sites, devices, IPs, circuits (synthetic)
-│   └── sync/                      # NetBox ⇄ device reconciliation
-├── orchestrator/
-│   ├── api/                       # FastAPI service catalog & order endpoints
-│   ├── workflows/                 # Prefect flows: provision, activate, rollback
-│   └── templates/                 # Jinja2 config templates per vendor
+oss-automation-lab/
+├── platform/
+│   ├── catalog/                 # Service & resource specs (TMF633)
+│   ├── orchestrator/            # Service order handling, Temporal workflows
+│   ├── inventory-adapter/       # NetBox ⇄ TMF638/639
+│   ├── activation/              # Config rendering & southbound push (TMF640)
+│   ├── controller/              # NETCONF/gNMI controller service
+│   └── assurance/               # Alarm ingestion & service health (TMF642)
+├── network/
+│   └── topologies/              # containerlab topologies
+├── environments/
+│   ├── n/                       # Helm values: current platform versions
+│   └── n1/                      # Helm values: candidate platform versions
+├── onboarding/
+│   ├── device-types/            # Onboarding packages per vendor/OS
+│   ├── service-models/          # Service definitions + templates
+│   └── pipeline/                # Onboarding automation & acceptance tests
 ├── validation/
-│   ├── batfish/                   # Pre-change reachability & policy checks
-│   ├── pyats/                     # Post-change state verification
-│   └── upgrade/                   # N vs N+1 regression suite
-├── telemetry/
-│   ├── gnmic.yml
-│   ├── vector.toml
-│   └── dashboards/                # Grafana JSON
-├── intelligence/
-│   ├── anomaly/                   # Interface / BGP / latency anomaly models
-│   ├── correlation/               # Topology-aware alarm grouping
-│   ├── rca/                       # LLM RCA agent + prompts + RAG indexer
-│   └── datasets/                  # Synthetic fault-injection datasets
-├── chaos/                         # Fault injection (link flap, BGP reset, CPU)
+│   ├── contract/                # Pact + Schemathesis API contract tests
+│   ├── lifecycle/               # End-to-end lifecycle scenarios
+│   ├── interop/                 # Cross-component & cross-version tests
+│   ├── reconciliation/          # Inventory vs controller vs network
+│   └── reports/                 # Generated N vs N+1 reports
+├── ai/
+│   ├── test-generation/         # LLM test case generation from specs
+│   ├── log-analysis/            # Platform log clustering & summarization
+│   ├── predictive/              # Workflow failure prediction
+│   └── anomaly/                 # KPI anomaly detection
+├── observability/
 ├── docs/
+│   ├── architecture.md
 │   ├── deployment-guide.md
 │   ├── validation-plan.md
-│   ├── onboarding-sop.md
+│   ├── onboarding-procedure.md
 │   ├── runbooks/
-│   └── adr/                       # Architecture Decision Records
-├── tests/
-├── docker-compose.yml
+│   └── adr/
+├── deploy/                      # Helm charts, Argo CD apps
 ├── Makefile
-└── .github/workflows/ci.yml
+└── .github/workflows/
 ```
 
 ---
 
 ## Quick Start
 
-**Requirements:** Linux host (or WSL2), 16 GB RAM minimum (32 GB recommended), Docker, containerlab, Python 3.12.
+**Requirements:** Linux or WSL2, 32 GB RAM recommended, Docker, kind or k3d, Helm, containerlab, Python 3.12.
 
 ```bash
-git clone https://github.com/<you>/netops-ai-lab.git
-cd netops-ai-lab
+git clone https://github.com/<you>/oss-automation-lab.git
+cd oss-automation-lab
 
-make bootstrap        # venv, dependencies, pre-commit
-make platform-up      # NetBox, Kafka, Prometheus, Loki, Grafana, Postgres
-make lab-up           # Deploy baseline (N) topology via containerlab
-make onboard          # Discover devices, populate NetBox, baseline configs
-make telemetry-up     # Start gNMIc + Vector pipelines
-make demo-fault       # Inject a fault and watch detection → RCA → remediation
+make bootstrap          # Tooling, venv, pre-commit
+make cluster-up         # Local Kubernetes cluster
+make deploy ENV=n       # Deploy the full OSS stack at version N
+make network-up         # Emulated network via containerlab
+make seed               # Catalog, inventory, sample service orders
+make e2e                # Run lifecycle scenarios end to end
 ```
 
 | Service | URL |
 |---|---|
-| Grafana | http://localhost:3000 |
+| Orchestrator API (OpenAPI) | http://localhost:8080/docs |
 | NetBox | http://localhost:8000 |
-| Orchestrator API docs | http://localhost:8080/docs |
-| Prefect UI | http://localhost:4200 |
+| Temporal UI | http://localhost:8088 |
+| Grafana | http://localhost:3000 |
 
 ---
 
-## Modules
+## Platform Modules
 
-### 1. Network & Service Onboarding
-- Discovers devices via gNMI/NETCONF, pulls facts with NAPALM, and creates or updates NetBox objects.
-- Reconciliation job flags drift between NetBox (intended) and device state (actual).
-- Enrolls onboarded devices into telemetry and assurance automatically.
+### Service Catalog & Ordering
+- Service specifications defined once, consumed by orchestrator, activation, and assurance.
+- Order simulator generates realistic TMF641 order traffic (create, modify, suspend, terminate).
 
-### 2. Service Provisioning & Activation
-- `POST /services` accepts an L3VPN or EVPN order → validates against NetBox → renders vendor configs.
-- Batfish runs pre-change checks (reachability, no route leaks, ACL impact).
-- Prefect workflow applies the change, verifies with pyATS, and rolls back automatically on failure.
-- Every step emits an event to Kafka for full lifecycle traceability.
+### Service Orchestration
+- Temporal workflows decompose service orders into resource actions.
+- Each step is idempotent, retryable, and emits lifecycle events to Kafka.
+- Compensation (rollback) paths are first-class and tested.
 
-### 3. Inventory Synchronization
-- Scheduled and event-driven sync between devices and NetBox.
-- Data integrity report: missing interfaces, IP conflicts, orphaned circuits, config drift.
+### Inventory & Synchronization
+- NetBox as resource inventory, exposed through a TMF638/639 adapter.
+- Reconciliation jobs compare **intended** (inventory), **controller view**, and **actual** (device) state, producing a data-integrity report: missing objects, orphaned services, attribute drift, stale references.
 
-### 4. Observability
-- gNMI streaming for interface counters, optical levels (simulated), BGP/IS-IS state, CPU/memory.
-- Syslog normalized by Vector into structured events.
-- Grafana dashboards per layer: device health, service health, automation workflow success rate.
+### Activation & Controller
+- Model-driven config rendering from service definitions.
+- Southbound via NETCONF/gNMI with transactional commit and verification.
+
+### Assurance
+- Telemetry and alarms correlated to service instances, so health is reported per service, not just per device.
 
 ---
 
-## N/N+1 Upgrade Validation
+## N/N+1 Platform Validation
 
-Replicates how operations teams qualify a new software release before production.
+Qualifies a new release of any platform component before it reaches production.
 
-1. Stand up `core-n` (current release) and `core-n1` (candidate release) side by side.
-2. Run the identical regression suite against both:
-   - Control plane convergence (IS-IS, BGP) and timing
-   - Service reachability for every provisioned VPN
-   - Telemetry path compatibility (gNMI paths still valid)
-   - Automation compatibility (templates, APIs, NetBox sync)
-3. Produce a diff report: pass/fail matrix, behavior changes, convergence deltas, go/no-go recommendation.
+1. Deploy `environments/n` (current) and `environments/n1` (candidate) as parallel stacks.
+2. Run identical suites against both:
+   - **API contract tests:** no breaking changes to TMF or internal APIs
+   - **Lifecycle scenarios:** every service type through every lifecycle state
+   - **Interoperability:** N+1 component against N neighbors (mixed-version compatibility)
+   - **Data migration:** inventory and workflow state survive the upgrade intact
+   - **Performance:** order throughput, workflow latency, API p95/p99
+   - **Observability:** metrics, logs, and traces still emitted and parsable
+3. Generate a readiness report: pass/fail matrix, behavioral diffs, performance deltas, known issues, go/no-go.
 
 ```bash
-make upgrade-validate FROM=core-n TO=core-n1
+make validate FROM=n TO=n1 COMPONENT=orchestrator
 ```
 
 ---
 
-## AI & Operational Intelligence
+## Onboarding Framework
+
+A repeatable path for bringing something new into the platform.
+
+| Onboarding type | Pipeline steps |
+|---|---|
+| **New device type / OS** | YANG model import → template build → controller adapter test → inventory model → activation test → assurance enrollment |
+| **New service model** | Catalog spec → decomposition rules → workflow → lifecycle tests → assurance mapping |
+| **New application / platform** | API contract registration → event schema registration → integration tests → observability hooks → runbook |
+
+Each onboarding package ships with acceptance criteria and must pass the full gate in CI before it is marked ready.
+
+---
+
+## AI for Platform Engineering
 
 | Use case | Approach |
 |---|---|
-| **Anomaly detection** | Seasonal decomposition + Isolation Forest on interface errors, latency, and BGP prefix counts |
-| **Event correlation** | Alarms grouped by time window and topology adjacency (NetBox graph in NetworkX) to suppress symptom noise and surface probable root nodes |
-| **Log analysis** | Template mining (Drain3) to cluster syslog patterns and flag novel messages |
-| **Predictive analytics** | Trend forecasting on optical power / error rates to predict degradation before outage |
-| **GenAI RCA** | LLM receives the correlated incident, recent changes, and relevant telemetry, retrieves matching runbooks from pgvector, and drafts an RCA with evidence and a recommended remediation workflow |
-| **Test automation** | LLM-assisted generation of pyATS test cases from service definitions |
+| **Test automation** | LLM reads OpenAPI/TMF specs and service models, drafts pytest and lifecycle scenarios; humans review, CI executes |
+| **Log analysis** | Drain3 clusters platform logs into templates; LLM summarizes new or spiking patterns after deployments and test runs |
+| **Event correlation** | Links failures across orchestrator, activation, and controller using trace IDs and order IDs to find the originating component |
+| **Predictive analytics** | Model on historical workflow runs predicts orders likely to fail (by service type, target device, payload attributes) before execution |
+| **Anomaly detection** | Seasonal baselines + Isolation Forest on platform KPIs: workflow latency, error rates, sync drift, queue lag |
+| **Workflow optimization** | Analysis of Temporal execution history to identify slow or retry-heavy steps |
+| **N/N+1 report drafting** | LLM converts raw regression results into a readable readiness summary for stakeholders |
 
-**Guardrails:** the RCA agent recommends; it never executes. Remediation runs only through validated Prefect workflows with Batfish pre-checks and human approval.
-
-**Evaluation:** fault-injection scenarios in `chaos/` produce labeled ground truth, so detection precision/recall, time-to-detect, and RCA accuracy are measured, not asserted.
+**Guardrails:** AI output is advisory. Generated tests are reviewed before merge; nothing AI-generated changes platform or network state directly. All models are evaluated against labeled historical runs with tracked precision and recall.
 
 ---
 
 ## Testing & CI/CD
 
-- **Unit tests:** templates, parsers, correlation logic (`pytest`)
-- **Integration tests:** spin up a minimal topology in CI with containerlab and run provisioning end to end
-- **Static checks:** ruff, mypy, yamllint, Batfish policy checks on rendered configs
-- **Pipeline:** GitHub Actions — lint → unit → build images → integration lab → publish report
+- **Unit:** each microservice, templates, adapters
+- **Contract:** Pact between consumers and providers; Schemathesis fuzzing of every API
+- **Integration:** ephemeral kind cluster + containerlab topology per pull request
+- **Lifecycle E2E:** full order-to-assurance scenarios
+- **Pipeline:** GitHub Actions (lint → unit → contract → build → ephemeral E2E → report) and Argo CD for GitOps deployment of N and N+1 environments
 
 ---
 
@@ -248,11 +269,12 @@ make upgrade-validate FROM=core-n TO=core-n1
 
 | Document | Purpose |
 |---|---|
-| `docs/deployment-guide.md` | Build the platform from zero |
-| `docs/validation-plan.md` | Test strategy, entry/exit criteria, N/N+1 procedure |
-| `docs/onboarding-sop.md` | Step-by-step device and service onboarding |
-| `docs/runbooks/` | Troubleshooting for BGP down, link flap, telemetry gap, sync drift |
-| `docs/adr/` | Why NetBox, why Prefect, why Isolation Forest, LLM guardrail design |
+| `docs/architecture.md` | Component boundaries, APIs, event flows |
+| `docs/deployment-guide.md` | Build N and N+1 environments from zero |
+| `docs/validation-plan.md` | Test strategy, entry/exit criteria, release qualification |
+| `docs/onboarding-procedure.md` | Device, service, and application onboarding |
+| `docs/runbooks/` | Workflow stuck, sync drift, activation failure, event backlog |
+| `docs/adr/` | Key design decisions and trade-offs |
 
 ---
 
@@ -260,34 +282,38 @@ make upgrade-validate FROM=core-n TO=core-n1
 
 | Phase | Deliverable | Est. effort |
 |---|---|---|
-| 1 | containerlab topology + NetBox seeded + onboarding script | 1 week |
-| 2 | Telemetry pipeline + Grafana dashboards | 1 week |
-| 3 | Service provisioning API + Prefect workflows + Batfish/pyATS checks | 2 weeks |
-| 4 | N/N+1 upgrade validation suite + report generator | 1 week |
-| 5 | Anomaly detection + event correlation + fault injection | 2 weeks |
-| 6 | GenAI RCA agent with RAG over runbooks | 1–2 weeks |
-| 7 | CI/CD, docs, demo video | 1 week |
+| 1 | Kubernetes stack: NetBox, Kafka, observability, containerlab network | 1 week |
+| 2 | Catalog, orchestrator, activation, controller services with TMF APIs | 2–3 weeks |
+| 3 | Lifecycle E2E tests + inventory reconciliation | 1–2 weeks |
+| 4 | N/N+1 environments + regression/interop suite + readiness report | 2 weeks |
+| 5 | Onboarding framework with one device type and two service models | 1 week |
+| 6 | AI services: test generation, log analysis, predictive analytics, anomaly detection | 2–3 weeks |
+| 7 | CI/CD, GitOps, documentation, demo video | 1 week |
 
 ---
 
 ## Role-to-Module Mapping
 
-| Role requirement | Module |
+| Job requirement | Module |
 |---|---|
-| AI-driven automation solutions | `orchestrator/`, `intelligence/rca/` |
-| Automation workflows via APIs & orchestration | `orchestrator/api`, `orchestrator/workflows` |
-| Inventory sync, orchestration, telemetry validation | `inventory/sync`, `validation/`, `telemetry/` |
-| N/N+1 lab environments | `topologies/`, `validation/upgrade/` |
-| Software upgrades, interoperability, readiness | `validation/upgrade/` |
-| Network & service onboarding | `inventory/`, `docs/onboarding-sop.md` |
-| Provisioning, activation, assurance, lifecycle | `orchestrator/workflows` |
-| Log/telemetry analysis, RCA | `intelligence/`, `docs/runbooks/` |
-| Anomaly detection, event correlation, predictive analytics | `intelligence/anomaly`, `intelligence/correlation` |
-| Test automation | `tests/`, `validation/pyats`, LLM test generation |
-| Python, APIs, microservices, Linux, Git, containers, CI/CD | Entire repository |
-| Documentation & best practices | `docs/` |
+| AI-driven automation solutions | `ai/`, `platform/orchestrator` |
+| Automation workflows via APIs, orchestration, enterprise systems | `platform/`, TMF adapters |
+| Validate inventory sync, orchestration, workflow execution, telemetry, integrations | `validation/reconciliation`, `validation/lifecycle`, `validation/interop` |
+| Build and maintain N/N+1 lab environments | `environments/n`, `environments/n1` |
+| Production-like test environments | `deploy/`, `network/topologies` |
+| Software upgrades, feature validation, interop, operational readiness | `validation/`, readiness reports |
+| Onboard infrastructure, applications, services | `onboarding/` |
+| Provisioning, activation, assurance, inventory, lifecycle | `platform/` + lifecycle suite |
+| Connectivity, config accuracy, data integrity | `validation/reconciliation` |
+| Logs, telemetry, events, RCA | `observability/`, `ai/log-analysis` |
+| Test automation, predictive analytics, log analysis, event correlation, anomaly detection, workflow optimization | `ai/` |
+| OSS platforms, controller-based architectures | `platform/controller`, architecture docs |
+| Python, APIs, microservices, distributed systems | Entire platform |
+| Linux, Git, containers, CI/CD, automation frameworks | `deploy/`, `.github/workflows/` |
+| Deployment guides, validation plans, onboarding procedures, runbooks | `docs/` |
 
 ---
 
 ## License
-TBD
+
+MIT. Synthetic data and open-source components only.
